@@ -5,38 +5,16 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 
+use App\Models\Product;
+use App\Models\ProductCategory;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+
 class ProductController extends Controller
 {
-    public function index(Request $request)
-    {
-        $query = \App\Models\Product::with('category');
-
-        if ($request->filled('search')) {
-            $query->where(function($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                  ->orWhere('description', 'like', '%' . $request->search . '%');
-            });
-        }
-
-        if ($request->filled('category')) {
-            $query->whereHas('category', function ($q) use ($request) {
-                $q->where('slug', $request->category);
-            });
-        }
-
-        // Sorting Logic
-        if ($request->sort == 'termurah') {
-            $query->orderBy('price', 'asc');
-        } elseif ($request->sort == 'termahal') {
-            $query->orderBy('price', 'desc');
-        } else {
-            $query->latest(); // Default: Terbaru
-        }
-
-        $products = $query->paginate(6)->withQueryString();
-        $categories = \App\Models\ProductCategory::all();
-
-        return view('produk', compact('products', 'categories'));
+    public function index() {
+        $products = Product::with('category')->latest()->get();
+        return view('dashboard.produk.index', compact('products'));
     }
 
     /**
@@ -44,7 +22,8 @@ class ProductController extends Controller
      */
     public function create()
     {
-        //
+        $categories = ProductCategory::all();
+        return view('dashboard.produk.create', compact('categories'));
     }
 
     /**
@@ -52,13 +31,31 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'product_category_id' => 'required|exists:product_categories,id',
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        $data = $request->all();
+        $data['slug'] = Str::slug($request->name);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')->store('products', 'public');
+        }
+
+        Product::create($data);
+
+        return redirect()->route('dashboard.produk.index')->with('success', 'Produk berhasil ditambahkan.');
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Product $produk)
     {
         //
     }
@@ -66,24 +63,52 @@ class ProductController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id)
+    public function edit(Product $produk)
     {
-        //
+        $categories = ProductCategory::all();
+        return view('dashboard.produk.edit', compact('produk', 'categories'));
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, Product $produk)
     {
-        //
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'product_category_id' => 'required|exists:product_categories,id',
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'description' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        $data = $request->all();
+        $data['slug'] = Str::slug($request->name);
+
+        if ($request->hasFile('image')) {
+            if ($produk->image) {
+                Storage::disk('public')->delete($produk->image);
+            }
+            $data['image'] = $request->file('image')->store('products', 'public');
+        }
+
+        $produk->update($data);
+
+        return redirect()->route('dashboard.produk.index')->with('success', 'Produk berhasil diperbarui.');
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Product $produk)
     {
-        //
+        if ($produk->image) {
+            Storage::disk('public')->delete($produk->image);
+        }
+        
+        $produk->delete();
+
+        return redirect()->route('dashboard.produk.index')->with('success', 'Produk berhasil dihapus.');
     }
 }

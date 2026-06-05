@@ -12,7 +12,8 @@ class ProductCategoryController
      */
     public function index()
     {
-        //
+        $categories = ProductCategory::withCount('products')->get();
+        return view('dashboard.kategori.index', compact('categories'));
     }
 
     /**
@@ -20,7 +21,7 @@ class ProductCategoryController
      */
     public function create()
     {
-        //
+        return view('dashboard.kategori.create');
     }
 
     /**
